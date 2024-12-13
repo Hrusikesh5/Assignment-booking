@@ -1,6 +1,7 @@
 const express = require("express");
 const axios = require("axios");
 const CarRouter = express.Router();
+const turf = require("@turf/turf");
 
 // Mock car types and base prices
 const carTypes = [
@@ -17,10 +18,9 @@ function convertCurrency(amount, currency) {
 
 // Generate car options with prices
 function generateCarOptions(distance, currency) {
-  // distance in km
+  // distance is in kilometers
   return carTypes.map((car) => {
-    const randomFactor = Math.random() * 20;
-
+    const randomFactor = Math.random() * 20; // Add a bit of randomness
     const price = (car.basePrice + randomFactor) * (distance / 10);
     const convertedPrice = convertCurrency(price, currency);
     return {
@@ -39,22 +39,13 @@ CarRouter.post("/getOptions", async (req, res) => {
       return res.status(400).json({ error: "Missing required fields." });
     }
 
-    const pickup = { lat: origin.latitude, lon: origin.longitude };
-    const dropoff = { lat: destination.latitude, lon: destination.longitude };
+    // Create Turf points
+    const from = turf.point([origin.longitude, origin.latitude]);
+    const to = turf.point([destination.longitude, destination.latitude]);
 
-    // Call OSRM to get distance
-    const url = `https://router.project-osrm.org/route/v1/driving/${pickup.lon},${pickup.lat};${dropoff.lon},${dropoff.lat}?overview=false`;
-    const response = await axios.get(url);
-    if (
-      !response.data ||
-      !response.data.routes ||
-      response.data.routes.length === 0
-    ) {
-      return res.status(400).json({ error: "Could not calculate route." });
-    }
-
-    const distanceInMeters = response.data.routes[0].distance;
-    const distanceInKm = distanceInMeters / 1000;
+    // Calculate the great-circle distance in kilometers
+    const options = { units: "kilometers" };
+    const distanceInKm = turf.distance(from, to, options);
 
     const cars = generateCarOptions(distanceInKm, currency);
 
